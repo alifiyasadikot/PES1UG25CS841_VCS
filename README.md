@@ -600,3 +600,100 @@ The following questions cover filesystem concepts beyond the implementation scop
 - **Git Internals** (Pro Git book): https://git-scm.com/book/en/v2/Git-Internals-Plumbing-and-Porcelain
 - **Git from the inside out**: https://codewords.recurse.com/issues/two/git-from-the-inside-out
 - **The Git Parable**: https://tom.preston-werner.com/2009/05/19/the-git-parable.html
+
+---
+
+# Lab Report — PES1UG25CS841
+
+## Analysis Questions
+
+### Q5.1 — How would you implement pes checkout branch?
+
+To switch branches, three things must change in .pes/:
+First, read the target branch commit hash from .pes/refs/heads/<branch>.
+Second, walk that commits tree and restore every file to the working
+directory by reading each blob from the object store and writing it
+to the correct path on disk.
+Third, update .pes/HEAD to contain ref: refs/heads/<branch>.
+
+What makes this complex is handling files that exist in the current
+branch but not in the target branch - those must be deleted from the
+working directory. New directories may need to be created and old
+empty ones removed. The working directory must exactly match the
+target tree when checkout completes.
+
+### Q5.2 — How would you detect a dirty working directory conflict?
+
+Before switching branches, for every file tracked in the current index,
+compare its mtime and size metadata against the actual file on disk.
+This is the same fast-diff approach used by pes status. If any file
+has been modified since it was staged (metadata differs), AND that same
+file has a different blob hash between the current branch and the target
+branch, then checkout must refuse and print an error message. No
+re-hashing is needed - metadata comparison is sufficient for detection.
+This protects the user from losing uncommitted local changes.
+
+### Q5.3 — What happens in detached HEAD state and how to recover?
+
+In detached HEAD state, .pes/HEAD contains a raw commit hash directly
+instead of ref: refs/heads/main. New commits are created and chained
+normally through parent pointers, but no branch file is updated to
+track them. If you switch to another branch, those commits become
+unreachable because nothing points to them.
+
+To recover, you need the commit hash - visible in terminal history or
+via pes log while still in detached state. Then create a new branch
+by writing that hash into .pes/refs/heads/<new-branch> and updating
+.pes/HEAD to ref: refs/heads/<new-branch>. This makes the commits
+reachable again through the new branch pointer.
+
+### Q6.1 — Algorithm to find and delete unreachable objects
+
+The algorithm is mark-and-sweep in three steps:
+
+Step 1 - Mark reachable objects:
+Start from every branch tip in .pes/refs/heads/. For each commit,
+add its hash to a reachable hash set. Follow its tree pointer: add
+the tree hash, recursively add all subtree hashes, add all blob hashes.
+Then follow the parent pointer and repeat until no parent exists.
+
+Step 2 - Collect all objects:
+List every file under .pes/objects/ by scanning all shard directories.
+Reconstruct each full hash from the directory name and filename.
+
+Step 3 - Delete unreachable objects:
+Any hash found in Step 2 but not in the reachable set from Step 1
+is garbage and can be safely deleted.
+
+The best data structure for the reachable set is a hash set for O(1)
+insertion and lookup. For a repository with 100,000 commits and 50
+branches, assuming each commit references approximately 50 objects
+on average, you would visit roughly 5 million objects total.
+
+### Q6.2 — Race condition between GC and concurrent commit
+
+The race condition works like this:
+- At time T1, GC scans all reachable objects and does NOT see a
+  newly written blob because no commit references it yet
+- At time T2, pes add writes that blob to the object store
+- At time T3, pes commit is about to create a commit referencing it
+- If GC deletes the blob between T2 and T3, the new commit will
+  reference a missing object causing permanent repository corruption
+
+Git avoids this using a grace period strategy: objects newer than
+2 weeks are never deleted by GC regardless of reachability. A freshly
+written blob is always safe even if no commit references it yet.
+Additionally, Git writes the commit object first and only then updates
+the branch ref as the final atomic step. GC running before the ref
+update will not see the new objects as reachable, but the grace period
+protects them from deletion during that window.
+
+## Implementation Summary
+
+| Phase | File     | Functions Implemented                      |
+|-------|----------|--------------------------------------------|
+| 1     | object.c | object_write, object_read                  |
+| 2     | tree.c   | tree_from_index                            |
+| 3     | index.c  | index_load, index_save, index_add          |
+| 4     | commit.c | commit_create                              |
+
