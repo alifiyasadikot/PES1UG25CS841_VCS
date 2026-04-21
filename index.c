@@ -152,7 +152,8 @@ int index_status(const Index *index) {
 //   - stat / lstat                     : getting file metadata (size, mtime, mode)
 //   - index_find                       : checking if the file is already staged
 //
-// Returns 0 on success, -1 on error.
+// Phase 3: index_load reads .pes/index text file line by line.
+// Returns empty index if file missing - not an error condition.// Returns 0 on success, -1 on error.
 static int compare_index_entries(const void *a, const void *b) {
     return strcmp(((const IndexEntry *)a)->path, ((const IndexEntry *)b)->path);
 }
@@ -180,7 +181,8 @@ int index_load(Index *index) {
     fclose(f);
     return 0;
 }
-
+// Phase 3: index_save writes atomically using temp file + rename.
+// Uses pointer array instead of struct copy to avoid stack overflow.
 int index_save(const Index *index) {
     char tmp_path[512];
     snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", INDEX_FILE);
