@@ -1,4 +1,5 @@
-// index.c — Staging area implementation
+// Phase 3: index_load reads .pes/index text file line by line.
+// Returns empty index if file missing - not an error condition.// index.c — Staging area implementation
 //
 // Text format of .pes/index (one entry per line, sorted by path):
 //
