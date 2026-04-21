@@ -1,4 +1,5 @@
-// Phase 4: commit_create snapshots staged files into a commit object.
+// Implementation complete: commit_create ties together tree_from_index,
+// head_read, commit_serialize, object_write, and head_update atomically.// Phase 4: commit_create snapshots staged files into a commit object.
 // Builds tree from index, reads parent from HEAD, writes commit object.
 // commit.c — Commit creation and history traversal
 //
