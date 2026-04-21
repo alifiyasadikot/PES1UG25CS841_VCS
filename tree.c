@@ -208,7 +208,8 @@ static int write_tree_level(IndexEntry *entries, int count, const char *prefix, 
     free(data);
     return rc;
 }
-
+// Phase 2: tree_from_index is the entry point called by commit_create.
+// Handles empty index edge case before delegating to write_tree_level.
 int tree_from_index(ObjectID *id_out) {
     Index index;
     if (index_load(&index) != 0) return -1;
